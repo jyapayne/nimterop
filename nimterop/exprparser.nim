@@ -101,7 +101,7 @@ proc processNumberLiteral*(exprParser: ExprParser, node: TSNode): PNode =
   let nodeVal = node.val
 
   var match: RegexMatch
-  const reg = re"(\-)?(0\d+|0[xX][0-9a-fA-F]+|0[bB][01]+|\d+\.?\d*[fFlL]?|\d*\.?\d+[fFlL]?|\d+)([ulUL]*)"
+  const reg = re"(\-)?(0\d+|0[xX][0-9a-fA-F]+|0[bB][01]+|\d+|\d+\.?\d*[fFlL]?|\d*\.?\d+[fFlL]?)([ulUL]*)"
   let found = nodeVal.find(reg, match)
   if found:
     let
@@ -199,6 +199,8 @@ proc processBitwiseExpression*(exprParser: ExprParser, node: TSNode): PNode =
       nimSym = "and"
     of "^":
       nimSym = "xor"
+    of "+", "-", "*", "/":
+      nimSym = binarySym
     else:
       raise newException(ExprParseError, &"Unsupported binary symbol \"{binarySym}\"")
 
@@ -257,7 +259,7 @@ proc processTSNode*(exprParser: ExprParser, node: TSNode): PNode =
 
   of "parenthesized_expression":
     result = exprParser.processParenthesizedExpr(node)
-  of "bitwise_expression":
+  of "bitwise_expression", "math_expression":
     result = exprParser.processBitwiseExpression(node)
   of "shift_expression":
     result = exprParser.processShiftExpression(node)
