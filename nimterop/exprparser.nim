@@ -130,9 +130,9 @@ proc processStringLiteral*(exprParser: ExprParser, node: TSNode): PNode =
   let nodeVal = node.val
   result = newStrNode(nkStrLit, nodeVal[1 ..< nodeVal.len - 1])
 
-proc processTSNode*(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil): PNode
+proc processTSNode*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode
 
-proc processShiftExpression*(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil): PNode =
+proc processShiftExpression*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = newNode(nkInfix)
   let
     left = node[0]
@@ -149,27 +149,26 @@ proc processShiftExpression*(exprParser: ExprParser, node: TSNode, typeofNode: P
 
   let leftNode = exprParser.processTSNode(left, typeofNode)
 
-  var tnode = typeofNode
-  if tnode.isNil:
-    tnode = leftNode
+  if typeofNode.isNil:
+    typeofNode = nkCall.newTree(
+      exprParser.state.getIdent("typeof"),
+      leftNode
+    )
 
-  let rightNode = exprParser.processTSNode(right, tnode)
+  let rightNode = exprParser.processTSNode(right, typeofNode)
 
   result.add leftNode
   result.add nkCast.newTree(
-    nkCall.newTree(
-      exprParser.state.getIdent("typeof"),
-      tnode
-    ),
+    typeofNode,
     rightNode
   )
 
-proc processParenthesizedExpr*(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil): PNode =
+proc processParenthesizedExpr*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = newNode(nkPar)
   for i in 0 ..< node.len():
     result.add(exprParser.processTSNode(node[i], typeofNode))
 
-proc processLogicalExpression*(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil): PNode =
+proc processLogicalExpression*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = newNode(nkPar)
   let child = node[0]
   var nimSym = ""
@@ -189,7 +188,7 @@ proc processLogicalExpression*(exprParser: ExprParser, node: TSNode, typeofNode:
     exprParser.processTSNode(child, typeofNode)
   )
 
-proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil): PNode =
+proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   if node.len > 1:
     # Node has left and right children ie: (2 + 7)
     var
@@ -204,19 +203,18 @@ proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: PNo
     res.add exprParser.state.getIdent(mathSym)
     let leftNode = exprParser.processTSNode(left, typeofNode)
 
-    var tnode = typeofNode
-    if tnode.isNil:
-      tnode = leftNode
+    if typeofNode.isNil:
+      typeofNode = nkCall.newTree(
+        exprParser.state.getIdent("typeof"),
+        leftNode
+      )
 
-    let rightNode = exprParser.processTSNode(right, tnode)
+    let rightNode = exprParser.processTSNode(right, typeofNode)
 
     res.add leftNode
     # res.add rightNode
     res.add nkCast.newTree(
-      nkCall.newTree(
-        exprParser.state.getIdent("typeof"),
-        tnode
-      ),
+      typeofNode,
       rightNode
     )
 
@@ -224,10 +222,7 @@ proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: PNo
     # hand argument, since some expressions return a differing
     # type than the input types (2/3 == float)
     result = nkCall.newTree(
-      nkCall.newTree(
-        exprParser.state.getIdent("typeof"),
-        tnode
-      ),
+      typeofNode,
       res
     )
 
@@ -248,6 +243,8 @@ proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: PNo
       # so we have to make a gental cast here to coerce it to one.
       # Might be bad because we are overwriting the type
       # There's probably a better way of doing this
+      if typeofNode.isNil:
+        typeofNode = exprParser.state.getIdent("int64")
       result.add nkPrefix.newTree(
         exprParser.state.getIdent(unarySym),
         nkPar.newTree(
@@ -268,7 +265,7 @@ proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: PNo
   else:
     raise newException(ExprParseError, &"Invalid bitwise_expression \"{node.val}\"")
 
-proc processBitwiseExpression(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil): PNode =
+proc processBitwiseExpression(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   if node.len() > 1:
     result = newNode(nkInfix)
 
@@ -288,24 +285,25 @@ proc processBitwiseExpression(exprParser: ExprParser, node: TSNode, typeofNode: 
       nimSym = "and"
     of "^":
       nimSym = "xor"
+    of "==", "!=":
+      nimSym = binarySym
     else:
       raise newException(ExprParseError, &"Unsupported binary symbol \"{binarySym}\"")
 
     result.add exprParser.state.getIdent(nimSym)
     let leftNode = exprParser.processTSNode(left, typeofNode)
 
-    var tnode = typeofNode
-    if tnode.isNil:
-      tnode = leftNode
+    if typeofNode.isNil:
+      typeofNode = nkCall.newTree(
+        exprParser.state.getIdent("typeof"),
+        leftNode
+      )
 
-    let rightNode = exprParser.processTSNode(right, tnode)
+    let rightNode = exprParser.processTSNode(right, typeofNode)
 
     result.add leftNode
     result.add nkCall.newTree(
-      nkCall.newTree(
-        exprParser.state.getIdent("typeof"),
-        tnode
-      ),
+      typeofNode,
       rightNode
     )
 
@@ -330,7 +328,13 @@ proc processBitwiseExpression(exprParser: ExprParser, node: TSNode, typeofNode: 
   else:
     raise newException(ExprParseError, &"Invalid bitwise_expression \"{node.val}\"")
 
-proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil): PNode =
+proc processSizeofExpression(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
+  result = nkCall.newTree(
+    exprParser.state.getIdent("sizeof"),
+    exprParser.processTSNode(node[0], typeofNode)
+  )
+
+proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   ## Handle all of the types of expressions here. This proc gets called recursively
   ## in the processX procs and will drill down to sub nodes.
   result = newNode(nkNone)
@@ -351,7 +355,9 @@ proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil
       raise newException(ExprParseError, &"Node type \"{nodeName}\" has no children")
   of "parenthesized_expression":
     result = exprParser.processParenthesizedExpr(node, typeofNode)
-  of "bitwise_expression":
+  of "sizeof_expression":
+    result = exprParser.processSizeofExpression(node, typeofNode)
+  of "bitwise_expression", "equality_expression":
     result = exprParser.processBitwiseExpression(node, typeofNode)
   of "math_expression":
     result = exprParser.processMathExpression(node, typeofNode)
@@ -380,10 +386,13 @@ proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: PNode = nil
 proc codeToNode*(state: NimState, code: string): PNode =
   ## Convert the C string to a nim PNode tree
   result = newNode(nkNone)
+  # This is used for keeping track of the type of the first
+  # symbol
+  var tnode: PNode = nil
   try:
     let exprParser = newExprParser(state, code)
     withCodeAst(exprParser):
-      result = exprParser.processTSNode(root)
+      result = exprParser.processTSNode(root, tnode)
   except ExprParseError as e:
     echo e.msg.getCommented
     result = newNode(nkNone)
