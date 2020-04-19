@@ -29,6 +29,24 @@ template val(node: TSNode): string =
 proc mode(exprParser: ExprParser): string =
   exprParser.state.gState.mode
 
+proc getIdent(exprParser: ExprParser, identName: string, kind = nskConst, parent = ""): PNode =
+  ## Gets a cPlugin transformed identifier from `identName`
+  ##
+  ## Returns PNode(nkNone) if the identifier is blank
+  result = newNode(nkNone)
+  var ident = identName
+  if ident != "_":
+    # Process the identifier through cPlugin
+    ident = exprParser.state.getIdentifier(ident, kind, parent)
+  if ident != "":
+    result = exprParser.state.getIdent(ident)
+
+proc getIdent(exprParser: ExprParser, node: TSNode, kind = nskConst, parent = ""): PNode =
+  ## Gets a cPlugin transformed identifier from `identName`
+  ##
+  ## Returns PNode(nkNone) if the identifier is blank
+  exprParser.getIdent(node.val, kind, parent)
+
 template withCodeAst(exprParser: ExprParser, body: untyped): untyped =
   ## A simple template to inject the TSNode into a body of code
   var parser = tsParserNew()
@@ -56,7 +74,7 @@ proc getNumNode(number, suffix: string): PNode {.inline.} =
   ## Convert a C number to a Nim number PNode
   result = newNode(nkNone)
   if number.contains("."):
-    let floatSuffix = number[result.len-1]
+    let floatSuffix = number[number.len-1]
     try:
       case floatSuffix
       of 'l', 'L':
@@ -66,7 +84,7 @@ proc getNumNode(number, suffix: string): PNode {.inline.} =
       of 'f', 'F':
         result = newFloatNode(nkFloat64Lit, parseFloat(number[0 ..< number.len - 1]))
       else:
-        result = newFloatNode(nkFloatLit, parseFloat(number[0 ..< number.len - 1]))
+        result = newFloatNode(nkFloatLit, parseFloat(number))
       return
     except ValueError:
       raise newException(ExprParseError, &"Could not parse float value \"{number}\".")
@@ -100,11 +118,12 @@ proc getNumNode(number, suffix: string): PNode {.inline.} =
     result.intVal = parseInt(number)
 
 proc processNumberLiteral*(exprParser: ExprParser, node: TSNode): PNode =
+  ## Parse a number literal from a TSNode. Can be a float, hex, long, etc
   result = newNode(nkNone)
   let nodeVal = node.val
 
   var match: RegexMatch
-  const reg = re"(\-)?(0\d+|0[xX][0-9a-fA-F]+|0[bB][01]+|\d+|\d+\.?\d*[fFlL]?|\d*\.?\d+[fFlL]?)([ulUL]*)"
+  const reg = re"(\-)?(0\d+|0[xX][0-9a-fA-F]+|0[bB][01]+|\d+\.\d*[fFlL]?|\d*\.\d+[fFlL]?|\d+)([ulUL]*)"
   let found = nodeVal.find(reg, match)
   if found:
     let
@@ -149,6 +168,9 @@ proc processShiftExpression*(exprParser: ExprParser, node: TSNode, typeofNode: v
 
   let leftNode = exprParser.processTSNode(left, typeofNode)
 
+  # If the typeofNode is nil, set it
+  # to be the leftNode because C's type coercion
+  # happens left to right, and we want to emulate it
   if typeofNode.isNil:
     typeofNode = nkCall.newTree(
       exprParser.state.getIdent("typeof"),
@@ -167,6 +189,12 @@ proc processParenthesizedExpr*(exprParser: ExprParser, node: TSNode, typeofNode:
   result = newNode(nkPar)
   for i in 0 ..< node.len():
     result.add(exprParser.processTSNode(node[i], typeofNode))
+
+proc processCastExpression*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
+  result = nkCast.newTree(
+    exprParser.processTSNode(node[0], typeofNode),
+    exprParser.processTSNode(node[1], typeofNode)
+  )
 
 proc processLogicalExpression*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = newNode(nkPar)
@@ -203,6 +231,9 @@ proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: var
     res.add exprParser.state.getIdent(mathSym)
     let leftNode = exprParser.processTSNode(left, typeofNode)
 
+    # If the typeofNode is nil, set it
+    # to be the leftNode because C's type coercion
+    # happens left to right, and we want to emulate it
     if typeofNode.isNil:
       typeofNode = nkCall.newTree(
         exprParser.state.getIdent("typeof"),
@@ -212,7 +243,6 @@ proc processMathExpression(exprParser: ExprParser, node: TSNode, typeofNode: var
     let rightNode = exprParser.processTSNode(right, typeofNode)
 
     res.add leftNode
-    # res.add rightNode
     res.add nkCast.newTree(
       typeofNode,
       rightNode
@@ -315,6 +345,7 @@ proc processBitwiseExpression(exprParser: ExprParser, node: TSNode, typeofNode: 
     var unarySym = exprParser.code[node.tsNodeStartByte() ..< child.tsNodeStartByte()].strip()
     techo "BIN SYM: ", unarySym
 
+    # TODO: Support more symbols here
     case unarySym
     of "~":
       nimSym = "not"
@@ -363,25 +394,26 @@ proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: var PNode):
     result = exprParser.processMathExpression(node, typeofNode)
   of "shift_expression":
     result = exprParser.processShiftExpression(node, typeofNode)
+  of "cast_expression":
+    result = exprParser.processCastExpression(node, typeofNode)
   of "logical_expression":
     result = exprParser.processLogicalExpression(node, typeofNode)
   # Why are these node types named true/false?
   of "true", "false":
     result = exprParser.state.parseString(node.val)
-  of "identifier":
-    var ident = node.val
-    if ident != "_":
-      # Process the identifier through cPlugin
-      ident = exprParser.state.getIdentifier(ident, nskConst)
-      techo ident
-    if ident != "":
-      result = exprParser.state.getIdent(ident)
+  of "type_descriptor":
+    let ty = getType(node.val)
+    result = exprParser.getIdent(ty, nskType, parent=node.getName())
     if result.kind == nkNone:
-      raise newException(ExprParseError, &"Could not get identifier \"{ident}\"")
+      result = exprParser.state.getIdent(ty)
+  of "identifier":
+    result = exprParser.getIdent(node, parent=node.getName())
+    if result.kind == nkNone:
+      raise newException(ExprParseError, &"Could not get identifier \"{node.val}\"")
   else:
     raise newException(ExprParseError, &"Unsupported node type \"{nodeName}\" for node \"{node.val}\"")
 
-  techo "NODE RES: ", result
+  techo "NODE RESULT: ", result
 
 proc codeToNode*(state: NimState, code: string): PNode =
   ## Convert the C string to a nim PNode tree
@@ -389,13 +421,13 @@ proc codeToNode*(state: NimState, code: string): PNode =
   # This is used for keeping track of the type of the first
   # symbol
   var tnode: PNode = nil
+  let exprParser = newExprParser(state, code)
   try:
-    let exprParser = newExprParser(state, code)
     withCodeAst(exprParser):
       result = exprParser.processTSNode(root, tnode)
   except ExprParseError as e:
-    echo e.msg.getCommented
+    techo e.msg
     result = newNode(nkNone)
   except Exception as e:
-    echo e.msg.getCommented
+    techo "UNEXPECTED EXCEPTION: ", e.msg
     result = newNode(nkNone)
