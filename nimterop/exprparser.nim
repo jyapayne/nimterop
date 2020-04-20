@@ -455,7 +455,9 @@ proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: var PNode):
     result = exprParser.processParenthesizedExpr(node, typeofNode)
   of "sizeof_expression":
     result = exprParser.processSizeofExpression(node, typeofNode)
-  of "bitwise_expression", "equality_expression":
+  # binary_expression from the new treesitter upgrade should work here
+  # once we upgrade
+  of "bitwise_expression", "equality_expression", "binary_expression":
     result = exprParser.processBitwiseExpression(node, typeofNode)
   of "math_expression":
     result = exprParser.processMathExpression(node, typeofNode)
