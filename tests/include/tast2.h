@@ -23,7 +23,7 @@ extern "C" {
 #define BOOL true
 #define MATHEXPR (1 + 2/3*20 - 100)
 #define ANDEXPR (100 & 11000)
-#define CASTEXPR (int) 34
+//define CASTEXPR (int) 34
 
 #define NULLCHAR '\0'
 #define OCTCHAR '\012'
