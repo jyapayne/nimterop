@@ -74,7 +74,9 @@ template withCodeAst(exprParser: ExprParser, body: untyped): untyped =
     tree.tsTreeDelete()
 
 proc parseChar(charStr: string): uint8 {.inline.} =
-
+  ## Parses a character literal out of a string. This is needed
+  ## because treesitter gives unescaped characters when parsing
+  ## strings.
   if charStr.len == 1:
     return charStr[0].uint8
 
@@ -119,6 +121,7 @@ proc parseChar(charStr: string): uint8 {.inline.} =
     result = uint8.high
 
 proc getCharLit(charStr: string): PNode {.inline.} =
+  ## Convert a character string into a proper Nim char lit node
   result = newNode(nkCharLit)
   result.intVal = parseChar(charStr).int64
 
