@@ -1,4 +1,4 @@
-import strformat, strutils, macros
+import strformat, strutils, macros, sets
 
 import regex
 
@@ -12,11 +12,12 @@ type
   ExprParser* = ref object
     state*: NimState
     code*: string
+    name*: string
 
   ExprParseError* = object of CatchableError
 
-proc newExprParser*(state: NimState, code: string): ExprParser =
-  ExprParser(state: state, code: code)
+proc newExprParser*(state: NimState, code: string, name = ""): ExprParser =
+  ExprParser(state: state, code: code, name: name)
 
 template techo(msg: varargs[string, `$`]) =
   if exprParser.state.gState.debug:
@@ -38,6 +39,8 @@ proc getIdent(exprParser: ExprParser, identName: string, kind = nskConst, parent
   if ident != "_":
     # Process the identifier through cPlugin
     ident = exprParser.state.getIdentifier(ident, kind, parent)
+  if exprParser.name.nBl and ident in exprParser.state.constIdentifiers:
+    ident = ident & "." & exprParser.name
   if ident != "":
     result = exprParser.state.getIdent(ident)
 
@@ -69,6 +72,55 @@ template withCodeAst(exprParser: ExprParser, body: untyped): untyped =
 
   defer:
     tree.tsTreeDelete()
+
+proc parseChar(charStr: string): uint8 {.inline.} =
+
+  if charStr.len == 1:
+    return charStr[0].uint8
+
+  # Handle octal, hex, unicode?
+  if charStr.startsWith("\\x"):
+    result = parseHexInt(charStr.replace("\\x", "0x")).uint8
+  elif charStr.len == 4: # Octal
+    result = parseOctInt("0o" & charStr[1 ..< charStr.len]).uint8
+
+  if result == 0:
+    case charStr
+    of "\\0":
+      result = ord('\0')
+    of "\\a":
+      result = 0x07
+    of "\\b":
+      result = 0x08
+    of "\\e":
+      result = 0x1B
+    of "\\f":
+      result = 0x0C
+    of "\\n":
+      result = '\n'.uint8
+    of "\\r":
+      result = 0x0D
+    of "\\t":
+      result = 0x09
+    of "\\v":
+      result = 0x0B
+    of "\\\\":
+      result = 0x5C
+    of "\\'":
+      result = '\''.uint8
+    of "\\\"":
+      result = '\"'.uint8
+    of "\\?":
+      result = 0x3F
+    else:
+      discard
+
+  if result > uint8.high:
+    result = uint8.high
+
+proc getCharLit(charStr: string): PNode {.inline.} =
+  result = newNode(nkCharLit)
+  result.intVal = parseChar(charStr).int64
 
 proc getNumNode(number, suffix: string): PNode {.inline.} =
   ## Convert a C number to a Nim number PNode
@@ -142,12 +194,24 @@ proc processNumberLiteral*(exprParser: ExprParser, node: TSNode): PNode =
     raise newException(ExprParseError, &"Could not find a number in number_literal: \"{nodeVal}\"")
 
 proc processCharacterLiteral*(exprParser: ExprParser, node: TSNode): PNode =
-  result = newNode(nkCharLit)
-  result.intVal = node.val[1].int64
+  let val = node.val
+  result = getCharLit(val[1 ..< val.len - 1])
 
 proc processStringLiteral*(exprParser: ExprParser, node: TSNode): PNode =
-  let nodeVal = node.val
-  result = newStrNode(nkStrLit, nodeVal[1 ..< nodeVal.len - 1])
+  let
+    nodeVal = node.val
+    strVal = nodeVal[1 ..< nodeVal.len - 1]
+
+  const
+    str = "(\\\\x[[:xdigit:]]{2}|\\\\\\d{3}|\\\\0|\\\\a|\\\\b|\\\\e|\\\\f|\\\\n|\\\\r|\\\\t|\\\\v|\\\\\\\\|\\\\'|\\\\\"|[[:ascii:]])"
+    reg = re(str)
+
+  # Convert the c string escape sequences/etc to Nim chars
+  var nimStr = newStringOfCap(nodeVal.len)
+  for m in strVal.findAll(reg):
+    nimStr.add(parseChar(strVal[m.group(0)[0]]).chr)
+
+  result = newStrNode(nkStrLit, nimStr)
 
 proc processTSNode*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode
 
@@ -415,13 +479,13 @@ proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: var PNode):
 
   techo "NODE RESULT: ", result
 
-proc codeToNode*(state: NimState, code: string): PNode =
+proc codeToNode*(state: NimState, code: string, name = ""): PNode =
   ## Convert the C string to a nim PNode tree
   result = newNode(nkNone)
   # This is used for keeping track of the type of the first
   # symbol
   var tnode: PNode = nil
-  let exprParser = newExprParser(state, code)
+  let exprParser = newExprParser(state, code, name)
   try:
     withCodeAst(exprParser):
       result = exprParser.processTSNode(root, tnode)

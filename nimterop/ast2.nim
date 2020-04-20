@@ -164,7 +164,7 @@ proc addPragma(gState: State, node: TSNode, pragma: PNode, name: string, value: 
   if value.isNil:
     pragma.add pident
   else:
-    var
+    let
       colExpr = newNode(nkExprColonExpr)
     colExpr.add pident
     colExpr.add value
@@ -1386,7 +1386,7 @@ proc addEnum(gState: State, node: TSNode) =
 
           if en.len > 1 and en[1].getName() in gEnumVals:
             # Explicit value
-            fval = "(" & gState.getNimExpression(gState.getNodeVal(en[1]), name) & ")." & name
+            fval = "(" & $gState.codeToNode(gState.getNodeVal(en[1]), name) & ")." & name
 
           # Cannot use newConstDef() since parseString(fval) adds backticks to and/or
           gState.constSection.add gState.parseString(&"const {fname}* = {fval}")[0][0]
