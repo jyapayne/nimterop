@@ -13,6 +13,7 @@ when defined(windows):
       complex = object
 
 static:
+  cSkipSymbols = @["mingw_choose_expr", "EXCEPTION_DEFINED"]
   cDebug()
   cDisableCaching()
   cAddStdDir()
