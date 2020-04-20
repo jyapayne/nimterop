@@ -93,11 +93,11 @@ macro testFields(t: typed, fields: static[string] = "") =
     for i in 0 ..< rl.len:
       let
         name = ($rl[i][0]).strip(chars = {'*'})
-        typ = ($(rl[i][1].repr())).replace("\n", "").replace("  ", "")
+        typ = ($(rl[i][1].repr())).replace("\n", "").replace("  ", "").replace("typeof", "type")
         n = names.find(name)
       assert n != -1, $t & "." & name & " invalid"
-      assert types[n] == typ,
-        "typeof(" & $t & ":" & name & ") != " & types[n] & ", is " & typ
+      assert types[n].replace("typeof", "type") == typ,
+        "typeof(" & $t & ":" & name & ") != " & types[n].replace("typeof", "type") & ", is " & typ
 
 assert A == 2
 assert B == 1.0
