@@ -118,7 +118,7 @@ assert BINEXPR == 5
 assert BOOL == true
 assert MATHEXPR == -99
 assert ANDEXPR == 96
-# assert CASTEXPR == 34.chr
+assert CASTEXPR == 34.chr
 
 assert TRICKYSTR == "N\x1C\nfoo\x00\'\"\c\v\a\b\e\f\t\\\\?bar"
 assert NULLCHAR == '\0'
