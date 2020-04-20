@@ -258,7 +258,7 @@ proc processParenthesizedExpr(exprParser: ExprParser, node: TSNode, typeofNode: 
     result.add(exprParser.processTSNode(node[i], typeofNode))
 
 proc processCastExpression(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
-  result = nkCall.newTree(
+  result = nkCast.newTree(
     exprParser.processTSNode(node[0], typeofNode),
     exprParser.processTSNode(node[1], typeofNode)
   )
