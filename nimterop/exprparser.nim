@@ -482,7 +482,7 @@ proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: var PNode):
 
   techo "NODE RESULT: ", result
 
-proc codeToNode*(state: NimState, code: string, name = ""): PNode =
+proc parseCExpression*(state: NimState, code: string, name = ""): PNode =
   ## Convert the C string to a nim PNode tree
   result = newNode(nkNone)
   # This is used for keeping track of the type of the first

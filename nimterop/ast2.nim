@@ -18,7 +18,7 @@ proc getPtrType*(str: string): string =
       str
 
 proc getLit*(nimState: NimState, str: string, expression = false): PNode =
-  result = nimState.codeToNode(str)
+  result = nimState.parseCExpression(str)
 
 proc getOverrideOrSkip(gState: State, node: TSNode, origname: string, kind: NimSymKind): PNode =
   # Check if symbol `origname` of `kind` and `origname` has any cOverride defined
@@ -1386,7 +1386,7 @@ proc addEnum(gState: State, node: TSNode) =
 
           if en.len > 1 and en[1].getName() in gEnumVals:
             # Explicit value
-            fval = "(" & $gState.codeToNode(gState.getNodeVal(en[1]), name) & ")." & name
+            fval = "(" & $gState.parseCExpression(gState.getNodeVal(en[1]), name) & ")." & name
 
           # Cannot use newConstDef() since parseString(fval) adds backticks to and/or
           gState.constSection.add gState.parseString(&"const {fname}* = {fval}")[0][0]
