@@ -172,7 +172,7 @@ proc getNumNode(number, suffix: string): PNode {.inline.} =
   else:
     result.intVal = parseInt(number)
 
-proc processNumberLiteral*(exprParser: ExprParser, node: TSNode): PNode =
+proc processNumberLiteral(exprParser: ExprParser, node: TSNode): PNode =
   ## Parse a number literal from a TSNode. Can be a float, hex, long, etc
   result = newNode(nkNone)
   let nodeVal = node.val
@@ -196,11 +196,11 @@ proc processNumberLiteral*(exprParser: ExprParser, node: TSNode): PNode =
   else:
     raise newException(ExprParseError, &"Could not find a number in number_literal: \"{nodeVal}\"")
 
-proc processCharacterLiteral*(exprParser: ExprParser, node: TSNode): PNode =
+proc processCharacterLiteral(exprParser: ExprParser, node: TSNode): PNode =
   let val = node.val
   result = getCharLit(val[1 ..< val.len - 1])
 
-proc processStringLiteral*(exprParser: ExprParser, node: TSNode): PNode =
+proc processStringLiteral(exprParser: ExprParser, node: TSNode): PNode =
   let
     nodeVal = node.val
     strVal = nodeVal[1 ..< nodeVal.len - 1]
@@ -216,9 +216,9 @@ proc processStringLiteral*(exprParser: ExprParser, node: TSNode): PNode =
 
   result = newStrNode(nkStrLit, nimStr)
 
-proc processTSNode*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode
+proc processTSNode(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode
 
-proc processShiftExpression*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
+proc processShiftExpression(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = newNode(nkInfix)
   let
     left = node[0]
@@ -252,18 +252,18 @@ proc processShiftExpression*(exprParser: ExprParser, node: TSNode, typeofNode: v
     rightNode
   )
 
-proc processParenthesizedExpr*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
+proc processParenthesizedExpr(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = newNode(nkPar)
   for i in 0 ..< node.len():
     result.add(exprParser.processTSNode(node[i], typeofNode))
 
-proc processCastExpression*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
+proc processCastExpression(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = nkCast.newTree(
     exprParser.processTSNode(node[0], typeofNode),
     exprParser.processTSNode(node[1], typeofNode)
   )
 
-proc processLogicalExpression*(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
+proc processLogicalExpression(exprParser: ExprParser, node: TSNode, typeofNode: var PNode): PNode =
   result = newNode(nkPar)
   let child = node[0]
   var nimSym = ""
