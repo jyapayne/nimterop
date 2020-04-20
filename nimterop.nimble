@@ -37,9 +37,8 @@ task docs, "Generate docs":
 task test, "Test":
   buildToastTask()
 
-  when (NimMajor, NimMinor, NimPatch) >= (1, 0, 0):
-    execTest "tests/tast2.nim"
-    execTest "tests/tast2.nim", "-d:HEADER"
+  execTest "tests/tast2.nim"
+  execTest "tests/tast2.nim", "-d:HEADER"
 
   execTest "tests/tnimterop_c.nim"
   execTest "tests/tnimterop_c.nim", "-d:FLAGS=\"-f:ast2\""
