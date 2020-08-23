@@ -31,7 +31,7 @@ yield""".split(Whitespace).toHashSet()
 
 const
   # Enum macro read from file - written into wrapper when required
-  gEnumMacroConst = staticRead(currentSourcePath.parentDir().parentDir() / "enumtype.nim")
+  gEnumMacroConst = "import nimterop / enumtypepub"
 
 var
   gEnumMacro* = gEnumMacroConst
