@@ -60,9 +60,15 @@ macro isDefined*(def: untyped): untyped =
   )
 
 macro getDefine*(def: untyped): untyped =
-  if gDefines.hasKey(def.strVal()):
-    return newStrLitNode(gDefines[def.strVal()])
-  return newStrLitNode("")
+  let version = newIdentNode(def.strVal())
+  let verVal =
+    if gDefines.hasKey(def.strVal()):
+      gDefines[def.strVal()]
+    else:
+      ""
+  result = quote do:
+    const `version` {.strdefine.} = `verVal`
+    `version`
 
 proc getDynlibExt(): string =
   when defined(Windows):
