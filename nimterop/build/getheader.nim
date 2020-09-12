@@ -59,6 +59,11 @@ macro isDefined*(def: untyped): untyped =
       false
   )
 
+macro getDefine*(def: untyped): untyped =
+  if gDefines.hasKey(def.strVal()):
+    return newStrLitNode(gDefines[def.strVal()])
+  return newStrLitNode("")
+
 proc getDynlibExt(): string =
   when defined(Windows):
     result = "[0-9.\\-]*\\.dll"
