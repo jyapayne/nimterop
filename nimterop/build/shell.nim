@@ -212,7 +212,7 @@ proc getFileDate*(fullpath: string): string =
       elif defined(OSX) or defined(FreeBSD):
         &"stat -f %m {fullpath.sanitizePath}"
 
-  (result, ret) = execAction(cmd)
+  (result, ret) = execAction(cmd, die=false)
 
 proc touchFile*(fullpath: string) =
   ## Touch file to update modified date
