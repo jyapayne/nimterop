@@ -407,29 +407,24 @@ proc gitTags*(outdir: string): seq[string] =
     if tag.len != 0:
       result.add tag
 
+proc loafExePath(): string =
+  currentSourcePath.parentDir.parentDir / ("loaf".addFileExt ExeExt)
+
 proc findFiles*(file: string, dir: string, recurse = true, regex = false): seq[string] =
   ## Find all matching files in the specified directory
   ##
   ## `file` is a regular expression if `regex` is true
   ##
   ## Turn off recursive search with `recurse`
+  let
+    loafExe = loafExePath()
+
+  doAssert fileExists(loafExe), "loaf not compiled: " & loafExe.sanitizePath &
+    " make sure 'nimble build' or 'nimble install' built it"
+
   var
-    cmd =
-      when defined(Windows):
-        "nimgrep --filenames --oneline --nocolor $1 \"$2\" $3"
-      elif defined(linux):
-        "find $3 $1 -regextype egrep -regex $2"
-      elif defined(osx) or defined(FreeBSD):
-        "find -E $3 $1 -regex $2"
-
-    recursive = ""
-
-  if recurse:
-    when defined(Windows):
-      recursive = "--recursive"
-  else:
-    when not defined(Windows):
-      recursive = "-maxdepth 1"
+    cmd = loafExe.quoteShell & " find --rexp $1 \"$2\" $3"
+    recursive = if recurse: "--recurse" else: ""
 
   var
     dir = dir
@@ -443,22 +438,14 @@ proc findFiles*(file: string, dir: string, recurse = true, regex = false): seq[s
 
     file = file.extractFilename
 
-  cmd = cmd % [recursive, (".*[\\\\/]" & file & "$").quoteShell, dir.sanitizePath]
+  cmd = cmd % [recursive, (".*[\\\\/]" & file & "$"), dir.sanitizePath]
 
   let
     (files, ret) = execAction(cmd, die = false)
   if ret == 0:
     for line in files.splitLines():
-      let f =
-        when defined(Windows):
-          if ": " in line:
-            line.split(": ", maxsplit = 1)[1]
-          else:
-            ""
-        else:
-          line
-      if f.len != 0:
-        result.add f
+      if line.len != 0:
+        result.add line
 
 proc findFile*(file: string, dir: string, recurse = true, first = false, regex = false): string =
   ## Find the file in the specified directory
